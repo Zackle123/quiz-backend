@@ -72,7 +72,8 @@ app.get('/questions', (req, res) => {
           text: q.text,
           answers: answers.filter(a => a.question_id === q.id).map(a => ({
             id: a.id,
-            text: a.text
+            text: a.text,
+            is_correct:a.is_correct
           }))
         }));
 
