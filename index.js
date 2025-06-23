@@ -84,15 +84,39 @@ app.get('/questions', (req, res) => {
 });
 
 // POST /questions
+// POST /questions
 app.post('/questions', (req, res) => {
-  const { answer } = req.body;
-  if (!answer) return res.status(400).json({ error: "Answer field is required" });
+  const { text, answers } = req.body;
 
-  db.run('INSERT INTO questions (answer) VALUES (?)', [answer], function (err) {
+  // Validate request structure
+  if (!text || !Array.isArray(answers) || answers.length !== 4) {
+    return res.status(400).json({ error: 'Question text and 4 answers are required.' });
+  }
+
+  const correctAnswers = answers.filter(a => a.is_correct === true);
+  if (correctAnswers.length !== 1) {
+    return res.status(400).json({ error: 'Exactly one answer must be marked as correct.' });
+  }
+
+  db.run('INSERT INTO questions (text) VALUES (?)', [text], function (err) {
     if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ id: this.lastID, answer });
+
+    const questionId = this.lastID;
+
+    const insertAnswer = db.prepare(`
+      INSERT INTO answers (question_id, text, is_correct) VALUES (?, ?, ?)
+    `);
+
+    answers.forEach(answer => {
+      insertAnswer.run(questionId, answer.text, answer.is_correct ? 1 : 0);
+    });
+
+    insertAnswer.finalize();
+
+    res.status(201).json({ message: 'Question and answers added successfully.', questionId });
   });
 });
+
 
 app.post('/submit', (req, res) => {
   const { name, answers } = req.body;
@@ -138,6 +162,16 @@ app.post('/submit', (req, res) => {
   );
 });
 
+app.get('/leaderboard', (req, res) => {
+  db.all(
+    `SELECT name, score, created_at FROM submissions ORDER BY score DESC, created_at ASC`,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    }
+  );
+});
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
